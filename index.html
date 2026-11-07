@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goal Hub</title>
+<style>
+:root{--bg:#0f1420;--card:#18202f;--tx:#e8ecf4;--mut:#8b96ab;--ac:#22c55e;--red:#ef4444}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,Tahoma,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--card);position:sticky;top:0;z-index:5}
+h1{font-size:1.2rem;margin:0;color:var(--ac)}
+button,select{background:#232d42;color:var(--tx);border:0;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 16px}
+nav button.on{background:var(--ac);color:#04210f}
+main{max-width:800px;margin:auto;padding:0 16px 40px}
+.bar{display:flex;gap:8px;margin:8px 0}
+.m{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;background:var(--card);padding:12px;border-radius:10px;margin:8px 0;cursor:pointer}
+.t{display:flex;align-items:center;gap:8px;min-width:0}.t:last-child{justify-content:flex-end;flex-direction:row-reverse}
+.t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+img{width:24px;height:24px;object-fit:contain}
+.sc{text-align:center;font-weight:700;direction:ltr}.sub{font-size:.75rem;color:var(--mut);font-weight:400}
+.live{color:var(--red);animation:b 1.2s infinite}@keyframes b{50%{opacity:.3}}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;font-size:.9rem}
+th,td{padding:8px 6px;text-align:center}td:nth-child(2){text-align:start}tr:nth-child(even){background:#1c2536}th{color:var(--mut)}
+.wrap{overflow-x:auto}.empty{color:var(--mut);text-align:center;padding:30px}
+input{background:#232d42;color:var(--tx);border:0;border-radius:8px;padding:8px 12px;font:inherit;flex:1;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pc{background:var(--card);border-radius:12px;padding:12px;text-align:center;display:flex;flex-direction:column;gap:4px}
+.pc .ph{width:96px;height:96px;border-radius:50%;object-fit:cover;object-position:top;background:#232d42;margin:auto}
+.pc span,.pc small{color:var(--mut);font-size:.8rem}
+#modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:16px}
+#modal.show{display:flex}#box{background:var(--card);border-radius:12px;padding:20px;max-width:420px;width:100%;line-height:1.9}
+</style>
+</head>
+<body>
+<header><h1 id="title"></h1><button id="lang"></button></header>
+<nav id="tabs"></nav>
+<main>
+ <div class="bar"><select id="comp" style="flex:1"></select></div>
+ <div id="out"></div>
+</main>
+<div id="modal"><div id="box"></div></div>
+<script>
+const COMPS=[["PL","Premier League","الدوري الإنجليزي"],["PD","La Liga","الدوري الإسباني"],["SA","Serie A","الدوري الإيطالي"],["BL1","Bundesliga","الدوري الألماني"],["FL1","Ligue 1","الدوري الفرنسي"],["CL","Champions League","دوري الأبطال"]];
+const T={ar:{title:"⚽ جول هب",live:"مباشر",results:"النتائج",fixtures:"القادمة",table:"الترتيب",scorers:"الهدافون",players:"اللاعبون",search:"ابحث عن لاعب...",none:"لا توجد بيانات",err:"خطأ في التحميل",team:"الفريق",p:"لعب",w:"فاز",d:"تعادل",l:"خسر",gd:"فارق",pts:"نقاط",goals:"أهداف",venue:"الملعب",ref:"الحكم",status:"الحالة",other:"EN"},
+en:{title:"⚽ Goal Hub",live:"LIVE",results:"Results",fixtures:"Fixtures",table:"Table",scorers:"Top Scorers",players:"Players",search:"Search a player...",none:"No data",err:"Load error",team:"Team",p:"P",w:"W",d:"D",l:"L",gd:"GD",pts:"Pts",goals:"Goals",venue:"Venue",ref:"Referee",status:"Status",other:"عربي"}};
+let lang=localStorage.lang||"ar",tab="live";
+const $=id=>document.getElementById(id),t=k=>T[lang][k];
+const api=async u=>{const r=await fetch("/api"+u);if(!r.ok)throw 0;return r.json()};
+function setLang(){document.documentElement.lang=lang;document.documentElement.dir=lang=="ar"?"rtl":"ltr";
+ $("title").textContent=t("title");$("lang").textContent=t("other");
+ $("tabs").innerHTML=["live","results","fixtures","table","scorers","players"].map(k=>`<button class="${k==tab?"on":""}" onclick="go('${k}')">${t(k)}</button>`).join("");
+ const v=$("comp").value;$("comp").innerHTML=COMPS.map(c=>`<option value="${c[0]}">${lang=="ar"?c[2]:c[1]}</option>`).join("");if(v)$("comp").value=v;
+ $("comp").style.display=tab=="live"?"none":"block"}
+$("lang").onclick=()=>{lang=lang=="ar"?"en":"ar";localStorage.lang=lang;setLang();load()};
+$("comp").onchange=load;
+function go(k){tab=k;setLang();load()}
+const fmt=d=>new Date(d).toLocaleString(lang=="ar"?"ar-LY":"en-GB",{dateStyle:"medium",timeStyle:"short"});
+function card(m){const s=m.score.fullTime,live=["IN_PLAY","PAUSED"].includes(m.status),sch=s.home==null;
+ return `<div class="m" onclick="detail(${m.id})"><div class="t"><img src="${m.homeTeam.crest||""}"><span>${m.homeTeam.shortName||m.homeTeam.name}</span></div>
+ <div class="sc">${sch?"vs":s.home+" - "+s.away}<div class="sub ${live?"live":""}">${live?"● LIVE":fmt(m.utcDate)}</div></div>
+ <div class="t"><img src="${m.awayTeam.crest||""}"><span>${m.awayTeam.shortName||m.awayTeam.name}</span></div></div>`}
+async function load(){const o=$("out"),c=$("comp").value;o.innerHTML='<div class="empty">...</div>';
+ try{let h="";
+ if(tab=="live"){const d=await api("/live");h=d.matches.map(card).join("")}
+ else if(tab=="results"){h=(await api(`/${c}/matches?status=FINISHED`)).matches.map(card).join("")}
+ else if(tab=="fixtures"){h=(await api(`/${c}/matches?status=SCHEDULED,TIMED`)).matches.map(card).join("")}
+ else if(tab=="table"){const r=(await api(`/${c}/standings`)).standings[0].table;
+  h=`<div class="wrap"><table><tr><th>#</th><th>${t("team")}</th><th>${t("p")}</th><th>${t("w")}</th><th>${t("d")}</th><th>${t("l")}</th><th>${t("gd")}</th><th>${t("pts")}</th></tr>`+
+  r.map(x=>`<tr><td>${x.position}</td><td><img src="${x.team.crest}" style="vertical-align:middle"> ${x.team.shortName||x.team.name}</td><td>${x.playedGames}</td><td>${x.won}</td><td>${x.draw}</td><td>${x.lost}</td><td>${x.goalDifference}</td><td><b>${x.points}</b></td></tr>`).join("")+"</table></div>"}
+ else if(tab=="players"){
+  o.innerHTML=`<div class="bar"><input id="q" placeholder="${t("search")}" onkeydown="if(event.key=='Enter')findP()"><button onclick="findP()">🔍</button></div><div id="pl" class="grid"></div>`;
+  const r=(await api(`/${c}/scorers`)).scorers.slice(0,12);
+  $("pl").innerHTML=r.map((x,i)=>pcard(x.player.name,x.team.shortName||x.team.name,"⚽ "+x.goals,"",i)).join("");
+  r.forEach(async(x,i)=>{try{const p=(await api("/player?name="+encodeURIComponent(x.player.name))).players[0];if(p&&p.img)document.querySelector("#pc"+i+" .ph").src=p.img}catch(e){}});
+  return}
+ else{const r=(await api(`/${c}/scorers`)).scorers;
+  h=`<div class="wrap"><table><tr><th>#</th><th></th><th>${t("team")}</th><th>${t("goals")}</th></tr>`+
+  r.map((x,i)=>`<tr><td>${i+1}</td><td>${x.player.name}</td><td>${x.team.shortName||x.team.name}</td><td><b>${x.goals}</b></td></tr>`).join("")+"</table></div>"}
+ o.innerHTML=h||`<div class="empty">${t("none")}</div>`}catch(e){o.innerHTML=`<div class="empty">${t("err")}</div>`}}
+const PH="data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="#232d42"/><circle cx="48" cy="36" r="16" fill="#8b96ab"/><path d="M16 96c0-22 14-34 32-34s32 12 32 34z" fill="#8b96ab"/></svg>');
+function pcard(n,team,extra,img,i){return `<div class="pc" id="pc${i}"><img class="ph" src="${img||PH}" loading="lazy" onerror="this.src=PH"><b>${n}</b><span>${team||""}</span><small>${extra||""}</small></div>`}
+async function findP(){const q=$("q").value.trim();if(!q)return;$("pl").innerHTML='<div class="empty">...</div>';
+ try{const r=(await api("/player?name="+encodeURIComponent(q))).players;
+ $("pl").innerHTML=r.map((p,i)=>pcard(p.name,p.team,[p.pos,p.nat].filter(Boolean).join(" · "),p.img,i)).join("")||`<div class="empty">${t("none")}</div>`}catch(e){$("pl").innerHTML=`<div class="empty">${t("err")}</div>`}}
+async function detail(id){try{const m=await api("/match/"+id),s=m.score.fullTime;
+ $("box").innerHTML=`<h3 style="margin:0">${m.homeTeam.name} ${s.home??"-"} : ${s.away??"-"} ${m.awayTeam.name}</h3>
+ <div>${t("status")}: ${m.status}</div><div>${fmt(m.utcDate)}</div>${m.venue?`<div>${t("venue")}: ${m.venue}</div>`:""}
+ ${m.referees&&m.referees[0]?`<div>${t("ref")}: ${m.referees[0].name}</div>`:""}
+ ${(m.goals||[]).map(g=>`<div>⚽ ${g.minute}' ${g.scorer.name}</div>`).join("")}`;
+ $("modal").classList.add("show")}catch(e){}}
+$("modal").onclick=()=>$("modal").classList.remove("show");
+setLang();load();setInterval(()=>{if(tab=="live")load()},60000);
+</script>
+</body>
+</html>
